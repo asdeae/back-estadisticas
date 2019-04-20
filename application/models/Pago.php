@@ -113,21 +113,49 @@ WHERE (
         ) order by concepto");
         $data = $query->result_array();
 
-        $finaldata = array();
 
 
+
+        $finaldata = array();  /*array de datos final*/
+        $concepto_anterior=0; /*Conccepto anterior*/
+        $concepto_actual=0;   /*Concepto actual*/
+        $monto=0;   /*Contador de montos*/
+
+
+        /*incializar valores*/
+        foreach ( $data as $value)
+        {
+            $concepto_anterior = $value["concepto"];
+
+            break;
+        }
+
+        /*Se recorre el bucle de valores*/
         foreach ($data as $value)
         {
 
             if($value["tipo"]=="DOL")
             {
-                $cambio = json_decode(file_get_contents("https://rocky-woodland-30485.herokuapp.com/cambio/".$value["fecha"]),true);
+                $servicio  =   json_decode(file_get_contents("https://rocky-woodland-30485.herokuapp.com/cambio/".$value["fecha"]),true);
 
+                $value["cantidad"] *=$servicio["compra"];
 
-                $value["cantidad"]*=$cambio["compra"];
             }
+            $concepto_actual=$value["concepto"];
 
+            if($concepto_actual!=$concepto_anterior)
+            {
+                array_push($data_final,array("concepto"=>$concepto_anterior,"cantidad"=>number_format($monto,2)));
+                $monto=0;
+
+            }
+            $monto+=$value["cantidad"];
+
+
+            $concepto_anterior = $concepto_actual;
         }
+        /*Se pushea el ultimo valor*/
+        array_push($data_final,array("concepto"=>$concepto_actual,"cantidad"=>number_format($monto,2)));
 
 
 
