@@ -113,53 +113,7 @@ WHERE (
         ) order by concepto");
         $data = $query->result_array();
 
-
-
-
-        $finaldata = array();  /*array de datos final*/
-        $concepto_anterior=0; /*Conccepto anterior*/
-        $concepto_actual=0;   /*Concepto actual*/
-        $monto=0;   /*Contador de montos*/
-
-
-        /*incializar valores*/
-        foreach ( $data as $value)
-        {
-            $concepto_anterior = $value["concepto"];
-
-            break;
-        }
-
-        /*Se recorre el bucle de valores*/
-        foreach ($data as $value)
-        {
-
-            if($value["tipo"]=="DOL")
-            {
-                $servicio  =   json_decode(file_get_contents("https://rocky-woodland-30485.herokuapp.com/cambio/".$value["fecha"]),true);
-
-                $value["cantidad"] *=$servicio["compra"];
-
-            }
-            $concepto_actual=$value["concepto"];
-
-            if($concepto_actual!=$concepto_anterior)
-            {
-                array_push($data_final,array("concepto"=>$concepto_anterior,"cantidad"=>number_format($monto,2)));
-                $monto=0;
-
-            }
-            $monto+=$value["cantidad"];
-
-
-            $concepto_anterior = $concepto_actual;
-        }
-        /*Se pushea el ultimo valor*/
-        array_push($data_final,array("concepto"=>$concepto_actual,"cantidad"=>number_format($monto,2)));
-
-
-
-
+        $finaldata = $this->algoritmoArray($data);
 
         $array_out = $this->formatoGrafico($finaldata,'Monto');
         return $array_out;
@@ -174,20 +128,22 @@ WHERE (
         }
 
         $query = $this->db->query(
-            "SELECT date_part('month',r.fecha) AS concepto,
-                    COUNT(r.importe) AS cantidad
-            FROM public.recaudaciones r
-            INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
-            INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
-            WHERE (
+            "SELECT date_part('month',r.fecha) AS concepto, r.importe AS importe, m.moneda AS moneda, r.fecha AS fecha
+FROM public.recaudaciones r
+         INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
+         INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
+         INNER JOIN public.moneda m ON (r.moneda = m.id_moneda)
+WHERE (
                 date_part('year',fecha) = ".$year."
-                AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
-                 ".$condicional."
-            )
-            GROUP BY date_part('month',r.fecha)"
+              AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
+              ".$condicional."
+          ) order by concepto"
         );
         $data = $query->result_array();
-        $array_out = $this->formatoGrafico($data,'Importes');
+
+        $datafinal = $this->algoritmoArray($data);
+
+        $array_out = $this->formatoGrafico($datafinal,'Importes');
         $f_array_out = $this->formatoFecha($array_out);
         return $f_array_out;
     }
@@ -204,20 +160,22 @@ WHERE (
         }
 
         $query = $this->db->query(
-            "SELECT date_part('month',r.fecha) AS concepto,
-                    SUM(importe) AS cantidad
+            "SELECT date_part('month',r.fecha) AS concepto, r.importe AS importe, m.moneda AS moneda, r.fecha AS fecha
             FROM public.recaudaciones r
             INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
             INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
+			INNER JOIN public.moneda m ON (r.moneda = m.id_moneda)
             WHERE (
                 date_part('year',fecha) = ".$year."
                 AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
-                 ".$condicional."
-            )
-            GROUP BY date_part('month',r.fecha)"
-        );
+                ".$condicional."  
+                ) order by concepto");
         $data = $query->result_array();
-        $array_out = $this->formatoGrafico($data,'Monto');
+
+
+        $final_data = $this->algoritmoArray($data);
+
+        $array_out = $this->formatoGrafico($final_data,'Monto');
         $f_array_out = $this->formatoFecha($array_out);
         return $f_array_out;
     }
@@ -243,9 +201,12 @@ WHERE (
                 AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
                  ".$condicional."
             )
-            ORDER BY to_char(r.fecha,'YYYY-MM-DD')");
+            ORDER BY concepto");
         $data = $query->result_array();
-        $array_out = $this->formatoTabla($data);
+
+        $datafinal = $this->algoritmoArray($data);
+
+        $array_out = $this->formatoTabla($datafinal);
         return $array_out;
     }
 
@@ -256,7 +217,8 @@ WHERE (
         else{
             $condicional = "";
         }
-        $query=$this->db->query("SELECT c.concepto AS concepto, r.importe AS importe, trim(a.codigo) AS codigoAlumno, a.ape_nom AS nombreAlumno, to_char(r.fecha,'DD-MM-YYYY') AS fecha
+        $query=$this->db->query("SELECT c.concepto AS concepto, r.importe AS importe, trim(a.codigo) AS codigoAlumno, a.ape_nom AS nombreAlumno,
+			to_char(r.fecha,'DD-MM-YYYY') AS fecha, m.moneda AS moneda
             FROM public.recaudaciones r
                 INNER JOIN public.concepto c
                     ON (r.id_concepto = c.id_concepto)
@@ -264,14 +226,18 @@ WHERE (
                     ON (r.id_alum = a.id_alum)
                 INNER JOIN public.clase_pagos p
                     ON (p.id_clase_pagos = c.id_clase_pagos)
+				INNER JOIN public.moneda m
+					ON (r.moneda = m.id_moneda)
+					
             WHERE (
                 date_part('year',r.fecha) between ".$yearStart." and ".$yearEnd."
                 AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
-                 ".$condicional."
+                ".$condicional."
             )
-            ORDER BY to_char(r.fecha,'YYYY-MM-DD')");
+            ORDER BY concepto");
         $data = $query->result_array();
-        $array_out = $this->formatoTabla($data);
+        $datafinal = $this->algoritmoArray($data);
+        $array_out = $this->formatoTabla($datafinal);
         return $array_out;
     }
     public function registrosPorMes ($year,$startMonth,$endMonth, $conceptos){
@@ -283,21 +249,24 @@ WHERE (
         }
 
         $query = $this->db->query(
-        "SELECT c.concepto AS concepto,r.importe AS importe, trim(a.codigo) AS codigoAlumno, a.ape_nom AS nombreAlumno, to_char(r.fecha,'DD-MM-YYYY') AS fecha
+        "SELECT c.concepto AS concepto,r.importe AS importe, trim(a.codigo) AS codigoAlumno, a.ape_nom AS nombreAlumno, 
+		to_char(r.fecha,'DD-MM-YYYY') AS fecha, m.moneda AS moneda
         FROM public.recaudaciones r
         INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
         INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
         INNER JOIN public.alumno a ON (r.id_alum = a.id_alum)
+		INNER JOIN public.moneda m ON (r.moneda = m.id_moneda)
         WHERE (
             date_part('year',r.fecha) = ".$year."
-            AND date_part('month',r.fecha) between ".$startMonth." and ".$endMonth."
+            AND date_part('month',r.fecha) between ".$startMonth." and  ".$endMonth."
             AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
-             ".$condicional."
+            ".$condicional."
         )
-        ORDER BY to_char(r.fecha,'YYYY-MM-DD')");
+        ORDER BY concepto");
 
         $data = $query->result_array();
-        $array_out = $this->formatoTabla($data);
+        $datafinal = $this->algoritmoArray($data);
+        $array_out = $this->formatoTabla($datafinal);
         return $array_out;
     }
 
@@ -311,19 +280,22 @@ WHERE (
             $condicional = "";
         }
         $query = $this->db->query(
-        "SELECT date_part('year',r.fecha) AS concepto,COUNT(r.importe) AS cantidad
+        "SELECT date_part('year',r.fecha) AS concepto, r.importe AS cantidad, m.moneda AS moneda, r.fecha AS fecha
         FROM public.recaudaciones r
         INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
         INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
+		INNER JOIN public.moneda m ON (r.moneda = m.id_moneda)
         WHERE (
             date_part('year',r.fecha) between ".$yearStart." and ".$yearEnd."
             AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
-             ".$condicional."
-        )
-        GROUP BY date_part('year',r.fecha);"
+            ".$condicional."
+        )"
         );
         $data = $query->result_array();
-        $array_out = $this->formatoGrafico($data,'Cantidad');
+
+        $datafinal = $this->algoritmoArray($data);
+
+        $array_out = $this->formatoGrafico($datafinal,'Cantidad');
         return $array_out;
 
     }
@@ -337,19 +309,23 @@ WHERE (
         }
 
         $query = $this->db->query(
-        "SELECT date_part('year',r.fecha) AS concepto,SUM(r.importe) AS cantidad
+        "        SELECT date_part('year',r.fecha) AS concepto,r.importe AS cantidad, m.moneda AS moneda, r.fecha AS fecha
         FROM public.recaudaciones r
         INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
         INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
+		INNER JOIN public.moneda m ON (r.moneda = m.id_moneda)
         WHERE (
             date_part('year',r.fecha) between ".$yearStart." and ".$yearEnd."
             AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
-             ".$condicional."
+            ".$condicional."
         )
-        GROUP BY date_part('year',r.fecha);"
+        "
         );
         $data = $query->result_array();
-        $array_out = $this->formatoGrafico($data,'Monto');
+
+        $datafinal = $this->algoritmoArray($data);
+
+        $array_out = $this->formatoGrafico($datafinal,'Monto');
         return $array_out;
 
     }
@@ -364,21 +340,24 @@ WHERE (
         }
 
         $query = $this->db->query(
-        "SELECT date_part('month',r.fecha) AS concepto,
-                COUNT(r.importe) AS cantidad
-        FROM public.recaudaciones r
-        INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
-        INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
-        WHERE (
-            date_part('year',r.fecha) = ".$year."
-            AND date_part('month',r.fecha) between ".$startMonth." and ".$endMonth."
-            AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
-             ".$condicional."
-        )
-        GROUP BY date_part('month',r.fecha);"
+        "SELECT date_part('month',r.fecha) AS concepto, r.importe AS cantidad, m.moneda AS moneda, r.fecha AS fecha
+FROM public.recaudaciones r
+         INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
+         INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
+         INNER JOIN public.moneda m ON (r.moneda = m.id_moneda)
+WHERE (
+                  date_part('year',r.fecha) = ".$year."
+              AND date_part('month',r.fecha) between ".$startMonth." and ".$endMonth."
+              AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
+            ".$condicional."
+          ) order by concepto "
         );
+
         $data = $query->result_array();
-        $array_out = $this->formatoGrafico($data,'Cantidad');
+
+        $datafinal = $this->algoritmoArray($data);
+
+        $array_out = $this->formatoGrafico($datafinal,'Cantidad');
         $f_array_out = $this->formatoFecha($array_out);
         return $f_array_out;
 
@@ -393,21 +372,23 @@ WHERE (
         }
 
         $query = $this->db->query(
-        "SELECT date_part('month',r.fecha) AS concepto,
-                SUM(r.importe) AS cantidad
+        "SELECT date_part('month',r.fecha) AS concepto,r.importe AS cantidad, m.moneda AS moneda, r.fecha AS fecha
         FROM public.recaudaciones r
         INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
         INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
+		INNER JOIN public.moneda m ON (r.moneda = m.id_moneda)
         WHERE (
             date_part('year',r.fecha) = ".$year."
             AND date_part('month',r.fecha) between ".$startMonth." and ".$endMonth."
             AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
-             ".$condicional."
-        )
-        GROUP BY date_part('month',r.fecha);"
+            ".$condicional."
+        )                        "
         );
         $data = $query->result_array();
-        $array_out = $this->formatoGrafico($data,'Cantidad');
+
+        $datafinal = $this->algoritmoArray($data);
+
+        $array_out = $this->formatoGrafico($datafinal,'Cantidad');
         $f_array_out = $this->formatoFecha($array_out);
         return $f_array_out;
 
@@ -487,6 +468,53 @@ WHERE (
             }
         }
         return $array_out;
+    }
+
+    private function algoritmoArray($data)
+    {
+
+        $data_final = array();  /*array de datos final*/
+        $concepto_anterior=0; /*Conccepto anterior*/
+        $concepto_actual=0;   /*Concepto actual*/
+        $monto=0;   /*Contador de montos*/
+
+
+        /*incializar valores*/
+        foreach ( $data as $value)
+        {
+            $concepto_anterior = $value["concepto"];
+
+            break;
+        }
+
+        /*Se recorre el bucle de valores*/
+        foreach ($data as $value)
+        {
+
+            if($value["tipo"]=="DOL")
+            {
+                $servicio  =   json_decode(file_get_contents("https://rocky-woodland-30485.herokuapp.com/cambio/".$value["fecha"]),true);
+
+                $value["cantidad"] *=$servicio["compra"];
+
+            }
+            $concepto_actual=$value["concepto"];
+
+            if($concepto_actual!=$concepto_anterior)
+            {
+                array_push($data_final,array("concepto"=>$concepto_anterior,"cantidad"=>number_format($monto,2)));
+                $monto=0;
+
+            }
+            $monto+=$value["cantidad"];
+
+
+            $concepto_anterior = $concepto_actual;
+        }
+        /*Se pushea el ultimo valor*/
+        array_push($data_final,array("concepto"=>$concepto_actual,"cantidad"=>number_format($monto,2)));
+
+        return $data_final;
     }
 
 }
