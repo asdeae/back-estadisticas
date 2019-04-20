@@ -48,20 +48,47 @@ class Pago extends CI_Model
             $condicional = "";
         }
 
-        $query = $this->db->query("SELECT c.concepto AS concepto, COUNT(r.id_concepto) AS cantidad
-        FROM public.recaudaciones r
-        INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
-        INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
-        WHERE (
-            extract(epoch FROM r.fecha) >= ".$fecha_inicio."
-            AND extract(epoch FROM r.fecha) <= ".$fecha_fin."
-            AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
-             ".$condicional."
-        )
-        GROUP BY r.id_concepto,c.concepto
-        ORDER BY c.concepto");
+        $query = $this->db->query("SELECT c.concepto AS concepto, r.importe AS cantidad, m.moneda AS tipo, r.fecha AS fecha
+FROM public.recaudaciones r
+         INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
+         INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
+         INNER JOIN public.moneda m ON (r.moneda = m.id_moneda)
+WHERE (
+                  extract(epoch FROM r.fecha) >= ".$fecha_inicio."
+              AND extract(epoch FROM r.fecha) <= ".$fecha_fin."
+              AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
+           ".$condicional."
+        )");
         $data = $query->result_array();
-        $array_out = $this->formatoGrafico($data,'Importes');
+
+        $finaldata = array();
+
+        foreach ($data as $value)
+        {
+
+            if($value["tipo"]=="DOL")
+            {
+                $cambio = json_decode(file_get_contents("https://rocky-woodland-30485.herokuapp.com/cambio/".$value["fecha"]),true);
+
+                $value["cantidad"]*=$cambio["compra"];
+            }
+            if(sizeof($finaldata)==0)
+            {
+                array_push($finaldata,array("concepto"=>$value["concepto"],"cantidad"=>$value["cantidad"]));
+            }
+            else{
+                for($i=0; $i<sizeof($finaldata);$i++)
+                {
+                    if($finaldata["concepto"][i]==$value["concepto"])
+                        $finaldata["cantidad"][i]+=$value["cantidad"];
+                    else
+                        array_push($finaldata,array("concepto"=>$value["concepto"],"cantidad"=>$value["cantidad"]));
+                }
+            }
+
+        }
+
+        $array_out = $this->formatoGrafico($finaldata,'Importes');
         return $array_out;
     }
 
@@ -73,20 +100,40 @@ class Pago extends CI_Model
             $condicional = "";
         }
 
-        $query = $this->db->query("SELECT c.concepto AS concepto, SUM(r.importe) AS cantidad
-        FROM public.recaudaciones r
-        INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
-        INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
-        WHERE (
-            extract(epoch FROM r.fecha) >= ".$fecha_inicio."
-            AND extract(epoch FROM r.fecha) <= ".$fecha_fin."
-            AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
-             ".$condicional."
-        )
-        GROUP BY r.id_concepto,c.concepto
-        ORDER BY c.concepto");
+        $query = $this->db->query("SELECT c.concepto AS concepto, r.importe AS cantidad, m.moneda AS tipo, r.fecha AS fecha
+FROM public.recaudaciones r
+         INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
+         INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
+         INNER JOIN public.moneda m ON (r.moneda = m.id_moneda)
+WHERE (
+                  extract(epoch FROM r.fecha) >= ".$fecha_inicio."
+              AND extract(epoch FROM r.fecha) <= ".$fecha_fin."
+              AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
+           ".$condicional."
+        ) order by concepto");
         $data = $query->result_array();
-        $array_out = $this->formatoGrafico($data,'Monto');
+
+        $finaldata = array();
+
+
+        foreach ($data as $value)
+        {
+
+            if($value["tipo"]=="DOL")
+            {
+                $cambio = json_decode(file_get_contents("https://rocky-woodland-30485.herokuapp.com/cambio/".$value["fecha"]),true);
+
+
+                $value["cantidad"]*=$cambio["compra"];
+            }
+
+        }
+
+
+
+
+
+        $array_out = $this->formatoGrafico($finaldata,'Monto');
         return $array_out;
     }
 
