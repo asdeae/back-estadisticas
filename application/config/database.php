@@ -74,10 +74,10 @@ $active_group = 'default';
 $query_builder = TRUE;
 
 $db['default'] = array(
-	'dsn'	=> 'pgsql:host=159.65.230.188;port=5432;dbname=tcs2;user=modulo3;password=modulo3c',
+	'dsn'	=> 'pgsql:host=159.65.230.188;port=5432;dbname=tcs2;user=modulo4;password=modulo4',
 	'hostname' => '159.65.230.188',
-	'username' => 'modulo3',
-	'password' => 'modulo3c',
+	'username' => 'modulo4',
+	'password' => 'modulo4',
 	'database' => 'tcs2',
 	'dbdriver' => 'pdo',
 	'dbprefix' => '',
