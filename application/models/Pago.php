@@ -58,7 +58,7 @@ WHERE (
               AND extract(epoch FROM r.fecha) <= ".$fecha_fin."
               AND p.id_clase_pagos in (SELECT distinct (id_clase_pagos) FROM configuracion where estado = 'S')
            ".$condicional."
-        )");
+        ) ORDER BY concepto");
         $data = $query->result_array();
 
         $finaldata = array();
@@ -160,7 +160,7 @@ WHERE (
         }
 
         $query = $this->db->query(
-            "SELECT date_part('month',r.fecha) AS concepto, r.importe AS importe, m.moneda AS moneda, r.fecha AS fecha
+            "SELECT date_part('month',r.fecha) AS concepto, r.importe AS cantidad, m.moneda AS moneda, r.fecha AS fecha
             FROM public.recaudaciones r
             INNER JOIN public.concepto c ON (r.id_concepto = c.id_concepto)
             INNER JOIN public.clase_pagos p ON (p.id_clase_pagos = c.id_clase_pagos)
@@ -187,7 +187,7 @@ WHERE (
         else{
             $condicional = "";
         }
-        $query = $this->db->query("SELECT c.concepto AS concepto, r.importe AS importe, trim(a.codigo) AS codigoAlumno, a.ape_nom AS nombreAlumno, to_char(r.fecha,'DD-MM-YYYY') AS fecha
+        $query = $this->db->query("SELECT c.concepto AS concepto, r.importe AS cantidad, trim(a.codigo) AS codigoAlumno, a.ape_nom AS nombreAlumno, to_char(r.fecha,'DD-MM-YYYY') AS fecha
             FROM public.recaudaciones r
                 INNER JOIN public.concepto c
                     ON (r.id_concepto = c.id_concepto)
@@ -217,7 +217,7 @@ WHERE (
         else{
             $condicional = "";
         }
-        $query=$this->db->query("SELECT c.concepto AS concepto, r.importe AS importe, trim(a.codigo) AS codigoAlumno, a.ape_nom AS nombreAlumno,
+        $query=$this->db->query("SELECT c.concepto AS concepto, r.importe AS cantidad, trim(a.codigo) AS codigoAlumno, a.ape_nom AS nombreAlumno,
 			to_char(r.fecha,'DD-MM-YYYY') AS fecha, m.moneda AS moneda
             FROM public.recaudaciones r
                 INNER JOIN public.concepto c
@@ -491,13 +491,14 @@ WHERE (
         foreach ($data as $value)
         {
 
-            if($value["tipo"]=="DOL")
+            if($value["moneda"]=="DOL")
             {
                 $servicio  =   json_decode(file_get_contents("https://rocky-woodland-30485.herokuapp.com/cambio/".$value["fecha"]),true);
 
                 $value["cantidad"] *=$servicio["compra"];
 
-            }
+            }   
+          
             $concepto_actual=$value["concepto"];
 
             if($concepto_actual!=$concepto_anterior)
