@@ -74,8 +74,8 @@ $active_group = 'default';
 $query_builder = TRUE;
 
 $db['default'] = array(
-	'dsn'	=> 'pgsql:host=159.65.230.188;port=5432;dbname=tcs2;user=modulo4;password=modulo4',
-	'hostname' => '159.65.230.188',
+	'dsn'	=> 'pgsql:host=67.205.143.180;port=5432;dbname=tcs2;user=modulo4;password=modulo4',
+	'hostname' => '67.205.143.180',
 	'username' => 'modulo4',
 	'password' => 'modulo4',
 	'database' => 'tcs2',
